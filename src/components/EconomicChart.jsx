@@ -184,7 +184,7 @@ const EconomicChart = ({ indicator }) => {
               <button
                 key={range.value}
                 onClick={() => setTimeRange(range.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                className={`px-4 py-2 text-xs font-medium rounded-md transition-colors ${
                   timeRange === range.value
                     ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
