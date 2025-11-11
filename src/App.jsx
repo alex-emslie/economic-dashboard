@@ -33,6 +33,12 @@ const ShowChartIcon = () => (
   </svg>
 );
 
+const DashboardIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+  </svg>
+);
+
 // Map icons to indicators
 const indicatorIcons = {
   GDP: <TrendingUpIcon />,
@@ -48,56 +54,61 @@ function App() {
   return (
     <div className="flex w-full min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-72 bg-gray-900 text-white flex flex-col flex-shrink-0">
-        {/* Sidebar Header */}
-        <div className="bg-gray-950 p-4 text-center">
-          <h2 className="text-xl font-bold text-blue-500">Economic Indicators</h2>
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+              <DashboardIcon />
+            </div>
+            <span className="text-xl font-bold text-gray-900">Economic</span>
+          </div>
         </div>
 
-        {/* Navigation List */}
-        <nav className="flex-1 pt-4">
-          <ul className="space-y-1 px-2">
+        {/* Navigation */}
+        <nav className="flex-1 p-4">
+          <div className="mb-2">
+            <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Indicators
+            </h3>
+          </div>
+          <ul className="space-y-1">
             {Object.values(ECONOMIC_INDICATORS).map((indicator) => (
               <li key={indicator.id}>
                 <button
                   onClick={() => setSelectedIndicator(indicator)}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
                     selectedIndicator.id === indicator.id
-                      ? 'font-bold'
-                      : 'hover:bg-gray-800'
+                      ? 'bg-gray-100 text-gray-900 font-medium'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
-                  style={{
-                    backgroundColor: selectedIndicator.id === indicator.id ? indicator.color : 'transparent',
-                  }}
                 >
                   <span className="flex-shrink-0">{indicatorIcons[indicator.id]}</span>
-                  <span className="text-sm text-left">{indicator.title}</span>
+                  <span className="text-sm">{indicator.title}</span>
                 </button>
               </li>
             ))}
           </ul>
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-gray-800">
-          <p className="text-xs text-gray-400">
-            Select an indicator to view its historical data and trends
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-200">
+          <p className="text-xs text-gray-500">
+            Data from Federal Reserve Economic Data (FRED)
           </p>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Top App Bar */}
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">U.S. Economic Dashboard</h1>
-            <p className="text-sm text-gray-500">Powered by FRED API</p>
-          </div>
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        {/* Top Bar */}
+        <header className="bg-white border-b border-gray-200 px-8 py-6 flex-shrink-0">
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">U.S. Economic Indicators</p>
         </header>
 
         {/* Chart Content */}
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 p-8 overflow-auto">
           <EconomicChart indicator={selectedIndicator} />
         </main>
       </div>
