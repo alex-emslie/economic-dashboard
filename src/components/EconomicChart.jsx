@@ -11,15 +11,6 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-import {
-  Paper,
-  Typography,
-  CircularProgress,
-  Box,
-  Alert,
-  ToggleButtonGroup,
-  ToggleButton,
-} from '@mui/material';
 import { fetchFredData } from '../services/fredApi';
 
 const EconomicChart = ({ indicator }) => {
@@ -121,94 +112,89 @@ const EconomicChart = ({ indicator }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <Paper sx={{ p: 1.5, bgcolor: 'background.paper' }}>
-          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+          <p className="font-bold text-sm text-gray-900 mb-1">
             {formatDate(data.date)}
-          </Typography>
-          <Typography variant="body2" color={indicator.color}>
+          </p>
+          <p className="text-sm mb-1" style={{ color: indicator.color }}>
             Value: {data.value.toLocaleString()} {indicator.unit}
-          </Typography>
+          </p>
           {data.momChange !== null && (
-            <Typography
-              variant="body2"
-              color={data.momChange >= 0 ? 'success.main' : 'error.main'}
-              sx={{ fontWeight: 'bold' }}
+            <p
+              className={`text-sm font-bold ${
+                data.momChange >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}
             >
               MoM: {data.momChange >= 0 ? '+' : ''}{data.momChange}%
-            </Typography>
+            </p>
           )}
-        </Paper>
+        </div>
       );
     }
     return null;
   };
 
+  const timeRanges = [
+    { value: '3M', label: '3M' },
+    { value: '6M', label: '6M' },
+    { value: '1Y', label: '1Y' },
+    { value: '2Y', label: '2Y' },
+    { value: '5Y', label: '5Y' },
+    { value: 'ALL', label: 'All' },
+  ];
+
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '500px',
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
-        <Typography variant="body2" sx={{ mt: 2 }}>
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-red-800 font-medium">{error}</p>
+        </div>
+        <p className="text-sm text-gray-600">
           Get a free API key at: https://fred.stlouisfed.org/docs/api/api_key.html
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   return (
-    <Paper sx={{
-      height: '100%',
-      width: '100%',
-      mx: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      p: 3,
-      boxSizing: 'border-box',
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: indicator.color, flexShrink: 0 }}>
+    <div className="h-full w-full flex flex-col p-6 bg-white">
+      {/* Header with Title and Time Range Selector */}
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h2 className="text-3xl font-bold mb-1" style={{ color: indicator.color }}>
             {indicator.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {indicator.description}
-          </Typography>
-        </Box>
-        <ToggleButtonGroup
-          value={timeRange}
-          exclusive
-          onChange={(e, newRange) => {
-            if (newRange !== null) {
-              setTimeRange(newRange);
-            }
-          }}
-          size="small"
-          sx={{ flexShrink: 0 }}
-        >
-          <ToggleButton value="3M">3M</ToggleButton>
-          <ToggleButton value="6M">6M</ToggleButton>
-          <ToggleButton value="1Y">1Y</ToggleButton>
-          <ToggleButton value="2Y">2Y</ToggleButton>
-          <ToggleButton value="5Y">5Y</ToggleButton>
-          <ToggleButton value="ALL">All</ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+          </h2>
+          <p className="text-sm text-gray-600">{indicator.description}</p>
+        </div>
 
-      <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
+        {/* Time Range Selector */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {timeRanges.map((range) => (
+            <button
+              key={range.value}
+              onClick={() => setTimeRange(range.value)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                timeRange === range.value
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="flex-1 w-full min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
@@ -262,19 +248,20 @@ const EconomicChart = ({ indicator }) => {
             />
           </ComposedChart>
         </ResponsiveContainer>
-      </Box>
+      </div>
 
-      <Box sx={{ mt: 2, flexShrink: 0 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+      {/* Footer */}
+      <div className="mt-4 flex-shrink-0">
+        <p className="text-xs text-gray-500">
           Data source: Federal Reserve Economic Data (FRED) • Last {data.length} observations
-        </Typography>
+        </p>
         {indicator.id === 'GDP' && (
-          <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontStyle: 'italic', mt: 0.5 }}>
+          <p className="text-xs text-amber-600 italic mt-1">
             Note: GDP is published quarterly (every 3 months)
-          </Typography>
+          </p>
         )}
-      </Box>
-    </Paper>
+      </div>
+    </div>
   );
 };
 

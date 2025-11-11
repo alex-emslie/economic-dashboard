@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss init:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

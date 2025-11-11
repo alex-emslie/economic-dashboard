@@ -1,173 +1,107 @@
 import { useState } from 'react';
-import {
-  Box,
-  CssBaseline,
-  Drawer,
-  AppBar,
-  Toolbar,
-  List,
-  Typography,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  ThemeProvider,
-  createTheme,
-} from '@mui/material';
-import {
-  TrendingUp,
-  Work,
-  LocalAtm,
-  AccountBalance,
-  ShowChart,
-} from '@mui/icons-material';
 import EconomicChart from './components/EconomicChart';
 import { ECONOMIC_INDICATORS } from './services/fredApi';
 
-const drawerWidth = 280;
+// Icon components as simple SVGs
+const TrendingUpIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+  </svg>
+);
 
-// Create a modern theme
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
+const WorkIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+  </svg>
+);
+
+const LocalAtmIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const AccountBalanceIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+  </svg>
+);
+
+const ShowChartIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+  </svg>
+);
 
 // Map icons to indicators
 const indicatorIcons = {
-  GDP: <TrendingUp />,
-  UNEMPLOYMENT: <Work />,
-  INFLATION: <LocalAtm />,
-  FED_RATE: <AccountBalance />,
-  SP500: <ShowChart />,
+  GDP: <TrendingUpIcon />,
+  UNEMPLOYMENT: <WorkIcon />,
+  INFLATION: <LocalAtmIcon />,
+  FED_RATE: <AccountBalanceIcon />,
+  SP500: <ShowChartIcon />,
 };
 
 function App() {
   const [selectedIndicator, setSelectedIndicator] = useState(ECONOMIC_INDICATORS.GDP);
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
-        <CssBaseline />
+    <div className="flex w-full min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <aside className="w-72 bg-gray-900 text-white flex flex-col flex-shrink-0">
+        {/* Sidebar Header */}
+        <div className="bg-gray-950 p-4 text-center">
+          <h2 className="text-xl font-bold text-blue-500">Economic Indicators</h2>
+        </div>
 
-        {/* App Bar */}
-        <AppBar
-          position="fixed"
-          sx={{
-            width: `calc(100% - ${drawerWidth}px)`,
-            ml: `${drawerWidth}px`,
-            bgcolor: 'white',
-            color: 'text.primary',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-          }}
-        >
-          <Toolbar>
-            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
-              U.S. Economic Dashboard
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ ml: 'auto', color: 'text.secondary' }}
-            >
-              Powered by FRED API
-            </Typography>
-          </Toolbar>
-        </AppBar>
-
-        {/* Side Navigation Drawer */}
-        <Drawer
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: drawerWidth,
-              boxSizing: 'border-box',
-              bgcolor: '#1e1e1e',
-              color: 'white',
-            },
-          }}
-          variant="permanent"
-          anchor="left"
-        >
-          <Toolbar sx={{ bgcolor: '#121212', justifyContent: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
-              Economic Indicators
-            </Typography>
-          </Toolbar>
-
-          <List sx={{ pt: 2 }}>
+        {/* Navigation List */}
+        <nav className="flex-1 pt-4">
+          <ul className="space-y-1 px-2">
             {Object.values(ECONOMIC_INDICATORS).map((indicator) => (
-              <ListItem key={indicator.id} disablePadding sx={{ mb: 0.5 }}>
-                <ListItemButton
-                  selected={selectedIndicator.id === indicator.id}
+              <li key={indicator.id}>
+                <button
                   onClick={() => setSelectedIndicator(indicator)}
-                  sx={{
-                    mx: 1,
-                    borderRadius: 1,
-                    '&.Mui-selected': {
-                      bgcolor: indicator.color,
-                      '&:hover': {
-                        bgcolor: indicator.color,
-                        opacity: 0.9,
-                      },
-                    },
-                    '&:hover': {
-                      bgcolor: 'rgba(255,255,255,0.08)',
-                    },
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
+                    selectedIndicator.id === indicator.id
+                      ? 'font-bold'
+                      : 'hover:bg-gray-800'
+                  }`}
+                  style={{
+                    backgroundColor: selectedIndicator.id === indicator.id ? indicator.color : 'transparent',
                   }}
                 >
-                  <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-                    {indicatorIcons[indicator.id]}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={indicator.title}
-                    primaryTypographyProps={{
-                      fontSize: '0.9rem',
-                      fontWeight: selectedIndicator.id === indicator.id ? 'bold' : 'normal',
-                    }}
-                  />
-                </ListItemButton>
-              </ListItem>
+                  <span className="flex-shrink-0">{indicatorIcons[indicator.id]}</span>
+                  <span className="text-sm text-left">{indicator.title}</span>
+                </button>
+              </li>
             ))}
-          </List>
+          </ul>
+        </nav>
 
-          <Box sx={{ mt: 'auto', p: 2, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-            <Typography variant="caption" color="rgba(255,255,255,0.6)">
-              Select an indicator to view its historical data and trends
-            </Typography>
-          </Box>
-        </Drawer>
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-gray-800">
+          <p className="text-xs text-gray-400">
+            Select an indicator to view its historical data and trends
+          </p>
+        </div>
+      </aside>
 
-        {/* Main Content */}
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            bgcolor: 'background.default',
-            minHeight: '100vh',
-            width: '100%',
-            maxWidth: 'none',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <Toolbar />
-          <Box sx={{ width: '100%', height: '100%', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <EconomicChart indicator={selectedIndicator} />
-          </Box>
-        </Box>
-      </Box>
-    </ThemeProvider>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* Top App Bar */}
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-gray-900">U.S. Economic Dashboard</h1>
+            <p className="text-sm text-gray-500">Powered by FRED API</p>
+          </div>
+        </header>
+
+        {/* Chart Content */}
+        <main className="flex-1 flex flex-col">
+          <EconomicChart indicator={selectedIndicator} />
+        </main>
+      </div>
+    </div>
   );
 }
 
