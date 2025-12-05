@@ -61,7 +61,7 @@ function App() {
               <li key={indicator.id}>
                 <button
                   onClick={() => setSelectedIndicator(indicator)}
-                  className={`w-full flex items-center gap-3 px-6 py-4 rounded-lg transition-colors text-left ${
+                  className={`w-full flex items-center gap-4 px-8 py-5 rounded-lg transition-colors text-left ${
                     selectedIndicator.id === indicator.id
                       ? 'bg-gray-100 text-gray-900 font-medium'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
