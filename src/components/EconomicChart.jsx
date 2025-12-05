@@ -140,6 +140,21 @@ const EconomicChart = ({ indicator }) => {
     { value: 'ALL', label: 'All' },
   ];
 
+  // Calculate symmetric domain for MoM axis (centered at 0)
+  const getMoMDomain = () => {
+    const momValues = data
+      .map(d => d.momChange)
+      .filter(v => v !== null && !isNaN(v));
+
+    if (momValues.length === 0) return [-1, 1];
+
+    const maxAbsValue = Math.max(...momValues.map(Math.abs));
+    const padding = maxAbsValue * 0.1; // 10% padding
+    const limit = Math.ceil(maxAbsValue + padding);
+
+    return [-limit, limit];
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -224,6 +239,7 @@ const EconomicChart = ({ indicator }) => {
               <YAxis
                 yAxisId="right"
                 orientation="right"
+                domain={getMoMDomain()}
                 tick={{ fontSize: 11, fill: '#6b7280' }}
                 label={{ value: 'MoM Change (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6b7280' } }}
                 stroke="#d1d5db"
