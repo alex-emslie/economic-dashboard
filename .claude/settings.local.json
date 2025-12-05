@@ -1,13 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git init:*)",
-      "Bash(npm install:*)",
-      "Bash(npx tailwindcss init:*)",
-      "Bash(npm uninstall:*)",
-      "Bash(npm run dev:*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nChart: Center MoM bars at 0 for consistent visual baseline\n\nModified the month-over-month Y-axis to always be centered at 0:\n- Added getMoMDomain() function to calculate symmetric axis range\n- Ensures equal spacing above and below the 0 baseline\n- Positive changes always extend upward from center\n- Negative changes always extend downward from center\n- Adds 10% padding for visual breathing room\n\nThis creates a consistent visual perspective across all economic indicators, making it easier to compare relative changes at a glance.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
