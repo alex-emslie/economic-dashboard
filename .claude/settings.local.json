@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebSearch",
+      "WebFetch(domain:fred.stlouisfed.org)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(brew upgrade:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

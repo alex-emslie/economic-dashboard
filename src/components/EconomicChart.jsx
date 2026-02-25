@@ -1,4 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  Box,
+  Flex,
+  Text,
+  Button,
+  Spinner,
+  Link,
+  VStack,
+  HStack,
+  Badge,
+} from '@chakra-ui/react';
 import {
   ComposedChart,
   Line,
@@ -10,8 +21,11 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
+  Area,
 } from 'recharts';
-import { fetchFredData } from '../services/fredApi';
+import { fetchFredData, ECONOMIC_INDICATORS } from '../services/fredApi';
+import { linearRegression, detectTrend } from '../utils/forecasting';
+import { analyzeCorrelations, generateCorrelationInsight } from '../utils/correlation';
 
 const EconomicChart = ({ indicator }) => {
   const [allData, setAllData] = useState([]);
@@ -19,30 +33,131 @@ const EconomicChart = ({ indicator }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('1Y');
+  const [visibleSegments, setVisibleSegments] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showForecast, setShowForecast] = useState(true);
+  const [forecast, setForecast] = useState([]);
+  const [trend, setTrend] = useState(null);
+  const [correlations, setCorrelations] = useState([]);
+  const [allIndicatorsData, setAllIndicatorsData] = useState({});
+  const dropdownRef = useRef(null);
+
+  // Initialize visible segments when indicator changes
+  useEffect(() => {
+    setVisibleSegments(indicator.segments.map(s => s.id));
+  }, [indicator]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const chartData = await fetchFredData(indicator.seriesId, 500);
+        // Fetch data for all segments
+        const segmentPromises = indicator.segments.map(segment =>
+          fetchFredData(segment.id, 500)
+        );
 
-        // Calculate month-over-month percentage changes
-        const dataWithMoM = chartData.map((point, index) => {
+        const segmentDataArrays = await Promise.all(segmentPromises);
+
+        // Merge all segment data by date
+        const dataByDate = {};
+
+        segmentDataArrays.forEach((segmentData, index) => {
+          const segment = indicator.segments[index];
+          segmentData.forEach(point => {
+            if (!dataByDate[point.date]) {
+              dataByDate[point.date] = { date: point.date };
+            }
+            dataByDate[point.date][segment.id] = point.value;
+          });
+        });
+
+        // Convert to array and sort by date
+        const mergedData = Object.values(dataByDate).sort((a, b) =>
+          new Date(a.date) - new Date(b.date)
+        );
+
+        // Calculate month-over-month for the primary series
+        const dataWithMoM = mergedData.map((point, index) => {
           if (index === 0) {
             return { ...point, momChange: null };
           }
-          const previous = chartData[index - 1].value;
-          const current = point.value;
-          const percentChange = ((current - previous) / previous) * 100;
-          return {
-            ...point,
-            momChange: parseFloat(percentChange.toFixed(2)),
-          };
+          const previous = mergedData[index - 1][indicator.seriesId];
+          const current = point[indicator.seriesId];
+          if (previous && current) {
+            const percentChange = ((current - previous) / previous) * 100;
+            return {
+              ...point,
+              momChange: parseFloat(percentChange.toFixed(2)),
+            };
+          }
+          return { ...point, momChange: null };
         });
 
         setAllData(dataWithMoM);
+
+        // Generate forecast for primary series
+        const primaryData = dataWithMoM.map(d => ({
+          date: d.date,
+          value: d[indicator.seriesId]
+        })).filter(d => d.value !== undefined && d.value !== null);
+
+        const forecastData = linearRegression(primaryData, 6);
+        setForecast(forecastData);
+
+        // Detect trend
+        const trendInfo = detectTrend(primaryData);
+        setTrend(trendInfo);
+
+        // Fetch data for all other indicators for correlation analysis
+        const otherIndicatorsData = {};
+        const otherIndicatorPromises = Object.values(ECONOMIC_INDICATORS)
+          .filter(ind => ind.id !== indicator.id)
+          .map(async (ind) => {
+            try {
+              const data = await fetchFredData(ind.seriesId, 500);
+              otherIndicatorsData[ind.seriesId] = data;
+            } catch (error) {
+              console.error(`Failed to fetch data for ${ind.id}:`, error);
+            }
+          });
+
+        await Promise.all(otherIndicatorPromises);
+
+        // Store all data for correlation analysis
+        const indicatorDataMap = {
+          [indicator.seriesId]: primaryData,
+          ...otherIndicatorsData
+        };
+        setAllIndicatorsData(indicatorDataMap);
+
+        // Calculate correlations with other indicators
+        const correlationResults = analyzeCorrelations(
+          indicator,
+          indicatorDataMap,
+          ECONOMIC_INDICATORS
+        );
+        setCorrelations(correlationResults.slice(0, 5)); // Top 5 correlations
+
       } catch (err) {
+        console.error('Error loading data:', err);
         setError('Failed to load economic data. Please check your API key.');
       } finally {
         setLoading(false);
@@ -111,21 +226,33 @@ const EconomicChart = ({ indicator }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-sm text-gray-900 mb-1.5">
+        <Box bg="white" p={3} borderRadius="lg" boxShadow="lg" border="1px" borderColor="gray.200" maxW="xs">
+          <Text fontWeight="semibold" fontSize="sm" color="gray.900" mb={1.5}>
             {formatDate(data.date)}
-          </p>
-          <p className="text-sm text-gray-600 mb-1">
-            Value: <span className="font-semibold text-gray-900">{data.value.toLocaleString()}</span> {indicator.unit}
-          </p>
+          </Text>
+          {indicator.segments.map((segment) => {
+            const value = data[segment.id];
+            if (value !== undefined && value !== null) {
+              return (
+                <Text key={segment.id} fontSize="xs" color="gray.600" mb={0.5}>
+                  <Box as="span" fontWeight="semibold" color={segment.color}>
+                    {segment.name}:
+                  </Box>{' '}
+                  {value.toLocaleString()} {indicator.unit}
+                </Text>
+              );
+            }
+            return null;
+          })}
           {data.momChange !== null && (
-            <p className="text-sm">
-              MoM: <span className={`font-semibold ${data.momChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            <Text fontSize="xs" mt={1.5} pt={1.5} borderTop="1px" borderColor="gray.200">
+              <Box as="span" color="gray.600">MoM:</Box>{' '}
+              <Box as="span" fontWeight="semibold" color={data.momChange >= 0 ? 'green.500' : 'red.500'}>
                 {data.momChange >= 0 ? '+' : ''}{data.momChange}%
-              </span>
-            </p>
+              </Box>
+            </Text>
           )}
-        </div>
+        </Box>
       );
     }
     return null;
@@ -139,6 +266,28 @@ const EconomicChart = ({ indicator }) => {
     { value: '5Y', label: '5Y' },
     { value: 'ALL', label: 'All' },
   ];
+
+  // Toggle segment visibility
+  const toggleSegment = (segmentId) => {
+    setVisibleSegments(prev => {
+      if (prev.includes(segmentId)) {
+        return prev.filter(id => id !== segmentId);
+      } else {
+        return [...prev, segmentId];
+      }
+    });
+  };
+
+  // Toggle all segments
+  const toggleAllSegments = () => {
+    if (visibleSegments.length === indicator.segments.length) {
+      // Deselect all
+      setVisibleSegments([]);
+    } else {
+      // Select all
+      setVisibleSegments(indicator.segments.map(s => s.id));
+    }
+  };
 
   // Calculate symmetric domain for MoM axis (centered at 0)
   const getMoMDomain = () => {
@@ -155,69 +304,197 @@ const EconomicChart = ({ indicator }) => {
     return [-limit, limit];
   };
 
+  // Combine historical data with forecast
+  const chartData = showForecast && forecast.length > 0
+    ? [
+        ...data,
+        ...forecast.map(f => ({
+          ...f,
+          [indicator.seriesId]: f.value,
+          momChange: null,
+        }))
+      ]
+    : data;
+
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-center min-h-[500px]">
-          <div className="flex flex-col items-center gap-3">
-            <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-emerald-500"></div>
-            <p className="text-sm text-gray-500">Loading data...</p>
-          </div>
-        </div>
-      </div>
+      <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm">
+        <Flex align="center" justify="center" minH="500px">
+          <VStack spacing={3}>
+            <Spinner size="lg" color="green.500" thickness="2px" />
+            <Text fontSize="sm" color="gray.500">Loading data...</Text>
+          </VStack>
+        </Flex>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <p className="text-red-800 font-medium text-sm">{error}</p>
-        </div>
-        <p className="text-sm text-gray-600">
-          Get a free API key at: <a href="https://fred.stlouisfed.org/docs/api/api_key.html" className="text-emerald-600 hover:text-emerald-700 underline" target="_blank" rel="noopener noreferrer">FRED API</a>
-        </p>
-      </div>
+      <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm" p={6}>
+        <Box bg="red.50" border="1px" borderColor="red.200" borderRadius="lg" p={4} mb={4}>
+          <Text fontSize="sm" fontWeight="medium" color="red.800">{error}</Text>
+        </Box>
+        <Text fontSize="sm" color="gray.600">
+          Get a free API key at:{' '}
+          <Link href="https://fred.stlouisfed.org/docs/api/api_key.html" color="green.500" isExternal textDecoration="underline">
+            FRED API
+          </Link>
+        </Text>
+      </Box>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+    <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm">
       {/* Header */}
-      <div className="border-b border-gray-200 px-6 py-5">
-        <div className="flex justify-between items-start">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-1">
+      <Box borderBottom="1px" borderColor="gray.200" px={6} py={5}>
+        <Flex justify="space-between" align="start" gap={4}>
+          <Box>
+            <Text as="h2" fontSize="xl" fontWeight="bold" color="gray.900" mb={1}>
               {indicator.title}
-            </h2>
-            <p className="text-sm text-gray-500">{indicator.description}</p>
-          </div>
+            </Text>
+            <Text fontSize="sm" color="gray.500">{indicator.description}</Text>
+          </Box>
 
-          {/* Time Range Selector */}
-          <div className="flex gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-            {timeRanges.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => setTimeRange(range.value)}
-                className={`px-10 py-5 text-base font-medium rounded-md transition-colors ${
-                  timeRange === range.value
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+          <Flex gap={3} align="start">
+            {/* Segment Selector Dropdown */}
+            <Box position="relative" ref={dropdownRef}>
+              <Button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                px={4}
+                py={2.5}
+                fontSize="sm"
+                fontWeight="medium"
+                bg="gray.50"
+                color="gray.900"
+                border="1px"
+                borderColor="gray.200"
+                _hover={{ bg: 'gray.100' }}
+                whiteSpace="nowrap"
               >
-                {range.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+                Segments ({visibleSegments.length}/{indicator.segments.length})
+              </Button>
+
+              {dropdownOpen && (
+                <Box
+                  position="absolute"
+                  right={0}
+                  mt={2}
+                  w="256px"
+                  bg="white"
+                  borderRadius="lg"
+                  boxShadow="lg"
+                  border="1px"
+                  borderColor="gray.200"
+                  zIndex={10}
+                  p={2}
+                >
+                  <Button
+                    onClick={toggleAllSegments}
+                    w="full"
+                    px={4}
+                    py={2}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    color="gray.700"
+                    bg="transparent"
+                    justifyContent="flex-start"
+                    _hover={{ bg: 'gray.50' }}
+                  >
+                    {visibleSegments.length === indicator.segments.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  <Box borderTop="1px" borderColor="gray.200" my={2} />
+                  {indicator.segments.map((segment) => (
+                    <Box
+                      key={segment.id}
+                      as="label"
+                      display="flex"
+                      alignItems="center"
+                      gap={3}
+                      px={4}
+                      py={2}
+                      _hover={{ bg: 'gray.50' }}
+                      borderRadius="md"
+                      cursor="pointer"
+                    >
+                      <Box
+                        as="input"
+                        type="checkbox"
+                        checked={visibleSegments.includes(segment.id)}
+                        onChange={() => toggleSegment(segment.id)}
+                        w={4}
+                        h={4}
+                      />
+                      <Flex alignItems="center" gap={2} flex={1}>
+                        <Box w={3} h={3} borderRadius="full" bg={segment.color} />
+                        <Text fontSize="sm" color="gray.700">{segment.name}</Text>
+                      </Flex>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            {/* Time Range Selector */}
+            <Flex gap={1} bg="gray.50" borderRadius="lg" p={1} border="1px" borderColor="gray.200">
+              {timeRanges.map((range) => (
+                <Button
+                  key={range.value}
+                  onClick={() => setTimeRange(range.value)}
+                  px={4}
+                  py={2.5}
+                  fontSize="sm"
+                  fontWeight="medium"
+                  bg={timeRange === range.value ? 'white' : 'transparent'}
+                  color={timeRange === range.value ? 'gray.900' : 'gray.600'}
+                  border={timeRange === range.value ? '1px' : '0'}
+                  borderColor={timeRange === range.value ? 'gray.200' : 'transparent'}
+                  boxShadow={timeRange === range.value ? 'sm' : 'none'}
+                  _hover={{
+                    bg: timeRange === range.value ? 'white' : 'gray.100',
+                    color: 'gray.900',
+                  }}
+                  borderRadius="md"
+                >
+                  {range.label}
+                </Button>
+              ))}
+            </Flex>
+          </Flex>
+        </Flex>
+      </Box>
 
       {/* Chart */}
-      <div className="p-6">
-        <div className="w-full" style={{ height: '500px' }}>
+      <Box p={6}>
+        {/* Trend and Forecast Toggle */}
+        <Flex justify="space-between" align="center" mb={4}>
+          <HStack spacing={2}>
+            {trend && (
+              <Badge
+                colorScheme={trend.direction === 'up' ? 'green' : trend.direction === 'down' ? 'red' : 'gray'}
+                fontSize="sm"
+                px={3}
+                py={1}
+              >
+                Trend: {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'} {trend.direction.toUpperCase()}
+              </Badge>
+            )}
+          </HStack>
+          <Button
+            size="sm"
+            onClick={() => setShowForecast(!showForecast)}
+            colorScheme={showForecast ? 'green' : 'gray'}
+            variant={showForecast ? 'solid' : 'outline'}
+          >
+            {showForecast ? 'Hide' : 'Show'} Forecast
+          </Button>
+        </Flex>
+
+        <Box w="full" h="500px">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
-              data={data}
+              data={chartData}
               margin={{ top: 10, right: 60, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -263,33 +540,108 @@ const EconomicChart = ({ indicator }) => {
                   />
                 ))}
               </Bar>
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="value"
-                stroke={indicator.color}
-                strokeWidth={2.5}
-                dot={false}
-                name={indicator.title}
-                animationDuration={1000}
-              />
+              {indicator.segments
+                .filter(segment => visibleSegments.includes(segment.id))
+                .map((segment) => (
+                  <Line
+                    key={segment.id}
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey={segment.id}
+                    stroke={segment.color}
+                    strokeWidth={segment.id === indicator.seriesId ? 2.5 : 2}
+                    dot={false}
+                    name={segment.name}
+                    animationDuration={1000}
+                    opacity={segment.id === indicator.seriesId ? 1 : 0.8}
+                    connectNulls={false}
+                  />
+                ))}
+              {showForecast && forecast.length > 0 && (
+                <>
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey={indicator.seriesId}
+                    stroke="#8b5cf6"
+                    strokeWidth={2.5}
+                    strokeDasharray="5 5"
+                    dot={{ fill: '#8b5cf6', r: 3 }}
+                    name="Forecast"
+                    animationDuration={1000}
+                    opacity={0.7}
+                    data={forecast.map(f => ({ ...f, [indicator.seriesId]: f.value }))}
+                    connectNulls={true}
+                  />
+                  <Area
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey={indicator.seriesId}
+                    stroke="none"
+                    fill="#8b5cf6"
+                    fillOpacity={0.1}
+                    data={forecast.map(f => ({ ...f, [indicator.seriesId]: f.value }))}
+                  />
+                </>
+              )}
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
-      </div>
+        </Box>
+      </Box>
+
+      {/* Correlation Insights */}
+      {correlations.length > 0 && (
+        <Box borderTop="1px" borderColor="gray.200" px={6} py={4}>
+          <Text fontSize="sm" fontWeight="semibold" color="gray.900" mb={3}>
+            Correlation Insights
+          </Text>
+          <VStack spacing={2} align="stretch">
+            {correlations.slice(0, 3).map((corr, index) => {
+              const insight = generateCorrelationInsight(indicator.title, corr);
+              return (
+                <Box
+                  key={index}
+                  p={3}
+                  bg="gray.50"
+                  borderRadius="md"
+                  border="1px"
+                  borderColor="gray.200"
+                >
+                  <Flex justify="space-between" align="start" mb={1}>
+                    <Text fontSize="sm" fontWeight="medium" color="gray.900">
+                      {insight.title}
+                    </Text>
+                    <Badge
+                      colorScheme={
+                        corr.relationship === 'positive' ? 'green' : 'red'
+                      }
+                      fontSize="xs"
+                    >
+                      {corr.correlation > 0 ? '+' : ''}{(corr.correlation * 100).toFixed(0)}%
+                    </Badge>
+                  </Flex>
+                  <Text fontSize="xs" color="gray.600">
+                    {insight.description}
+                  </Text>
+                </Box>
+              );
+            })}
+          </VStack>
+        </Box>
+      )}
 
       {/* Footer */}
-      <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
-        <p className="text-xs text-gray-500">
+      <Box borderTop="1px" borderColor="gray.200" px={6} py={4} bg="gray.50">
+        <Text fontSize="xs" color="gray.500">
           Data source: Federal Reserve Economic Data (FRED) • {data.length} observations
-        </p>
+        </Text>
         {indicator.id === 'GDP' && (
-          <p className="text-xs text-amber-600 mt-1.5">
+          <Text fontSize="xs" color="orange.500" mt={1.5}>
             Note: GDP is published quarterly (every 3 months)
-          </p>
+          </Text>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 
