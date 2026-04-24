@@ -14,7 +14,8 @@
       "Bash(open:*)",
       "Bash(curl -s \"https://mcp.figma.com/mcp/capture/1d68a16b-1d30-4b52-9253-5db4aabf50ff/status\")",
       "Bash(osascript -e 'tell application \"\"Google Chrome\"\" to open location \"\"http://localhost:5173/#figmacapture=3a938828-6500-44b0-be8f-7d6364479c9f&figmaendpoint=https%3A%2F%2Fmcp.figma.com%2Fmcp%2Fcapture%2F3a938828-6500-44b0-be8f-7d6364479c9f%2Fsubmit&figmadelay=8000\"\"')",
-      "mcp__plugin_figma_figma__use_figma"
+      "mcp__plugin_figma_figma__use_figma",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

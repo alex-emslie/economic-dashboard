@@ -18,12 +18,30 @@ import {
   Smile,
   Globe,
   ChevronDown,
+  Settings,
 } from 'lucide-react';
 import EconomicChart, { ControlsPanel } from './components/EconomicChart';
 import { ECONOMIC_INDICATORS } from './services/fredApi';
 import { BLS_INDICATORS } from './services/blsApi';
 import { WORLD_BANK_INDICATORS } from './services/worldBankApi';
 
+
+// ── Theme tokens ──────────────────────────────────────────────────────────────
+
+export const t = (dark) => ({
+  pageBg:        dark ? '#0f172a' : '#f9fafb',
+  sidebarBg:     dark ? '#1e293b' : '#ffffff',
+  cardBg:        dark ? '#1e293b' : '#ffffff',
+  cardBgAlt:     dark ? '#0f172a' : '#f9fafb',
+  border:        dark ? '#334155' : '#e5e7eb',
+  borderSubtle:  dark ? '#1e293b' : '#f3f4f6',
+  textPrimary:   dark ? '#f1f5f9' : '#111827',
+  textSecondary: dark ? '#94a3b8' : '#6b7280',
+  textMuted:     dark ? '#64748b' : '#9ca3af',
+  navActive:     dark ? '#334155' : '#f3f4f6',
+  navHover:      dark ? '#1e293b' : '#f9fafb',
+  inputBg:       dark ? '#334155' : '#f9fafb',
+});
 
 // ── Category config ───────────────────────────────────────────────────────────
 
@@ -42,7 +60,8 @@ const ALL_INDICATORS = { ...ECONOMIC_INDICATORS, ...BLS_INDICATORS, ...WORLD_BAN
 
 // ── Nav item ──────────────────────────────────────────────────────────────────
 
-function NavItem({ indicator, isActive, onSelect }) {
+function NavItem({ indicator, isActive, onSelect, darkMode }) {
+  const tk = t(darkMode);
   return (
     <Button
       onClick={() => onSelect(indicator)}
@@ -52,9 +71,9 @@ function NavItem({ indicator, isActive, onSelect }) {
       h="auto"
       fontSize="xs"
       fontWeight={isActive ? 'semibold' : 'normal'}
-      bg={isActive ? 'gray.100' : 'transparent'}
-      color={isActive ? 'gray.900' : 'gray.600'}
-      _hover={{ bg: isActive ? 'gray.100' : 'gray.50', color: 'gray.900' }}
+      bg={isActive ? tk.navActive : 'transparent'}
+      color={isActive ? tk.textPrimary : tk.textSecondary}
+      _hover={{ bg: tk.navHover, color: tk.textPrimary }}
       borderRadius="md"
       w="full"
     >
@@ -82,6 +101,11 @@ function App() {
   const [showForecast, setShowForecast] = useState(false);
   const [showMoM, setShowMoM] = useState(true);
   const [showTable, setShowTable] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
   const [timeRange, setTimeRange] = useState('1Y');
   const [visibleSegments, setVisibleSegments] = useState(
     ALL_INDICATORS.GDP.segments.map(s => s.id)
@@ -112,12 +136,14 @@ function App() {
     indicators: Object.values(ALL_INDICATORS).filter(ind => ind.category === cat.id),
   })).filter(group => group.indicators.length > 0);
 
+  const tk = t(darkMode);
+
   return (
-    <Flex w="full" minH="100vh" bg="gray.50">
+    <Flex w="full" minH="100vh" bg={tk.pageBg}>
       {/* Left Sidebar */}
       <Box
         w="280px"
-        bg="white"
+        bg={tk.sidebarBg}
         boxShadow="md"
         flexShrink={0}
         display="flex"
@@ -128,18 +154,18 @@ function App() {
         overflowY="auto"
       >
         {/* App title */}
-        <Box px={4} py={5} borderBottom="1px" borderColor="gray.100">
-          <Text fontSize="sm" fontWeight="bold" color="gray.900" letterSpacing="tight">
+        <Box px={4} py={5} borderBottom="1px" borderColor={tk.border}>
+          <Text fontSize="sm" fontWeight="bold" color={tk.textPrimary} letterSpacing="tight">
             Economic Dashboard
           </Text>
-          <Text fontSize="xs" color="gray.400" mt={0.5}>FRED · BLS</Text>
+          <Text fontSize="xs" color={tk.textMuted} mt={0.5}>FRED · BLS</Text>
         </Box>
 
         {/* Navigation */}
         <Box flex={1} px={2} py={1} overflowY="auto">
           <AccordionRoot
             multiple
-            defaultValue={CATEGORIES.map(c => c.id)}
+            defaultValue={[byCategory[0]?.category.id]}
             variant="plain"
           >
             {byCategory.map(({ category, indicators }) => {
@@ -150,7 +176,7 @@ function App() {
                   key={category.id}
                   value={category.id}
                   border="1px"
-                  borderColor="gray.200"
+                  borderColor={tk.border}
                   borderRadius="md"
                   mb={1.5}
                   overflow="hidden"
@@ -162,9 +188,9 @@ function App() {
                     fontWeight="semibold"
                     textTransform="uppercase"
                     letterSpacing="wider"
-                    color={hasActive ? 'gray.800' : 'gray.500'}
-                    bg={hasActive ? 'gray.50' : 'white'}
-                    _hover={{ bg: 'gray.50', color: 'gray.700' }}
+                    color={hasActive ? tk.textPrimary : tk.textSecondary}
+                    bg={hasActive ? tk.navActive : tk.sidebarBg}
+                    _hover={{ bg: tk.navHover, color: tk.textPrimary }}
                     cursor="pointer"
                   >
                     <Flex align="center" gap={1.5} flex={1}>
@@ -178,10 +204,10 @@ function App() {
                       _open={{ transform: 'rotate(0deg)' }}
                       _closed={{ transform: 'rotate(-90deg)' }}
                     >
-                      <ChevronDown size={12} style={{ color: '#9ca3af' }} />
+                      <ChevronDown size={12} style={{ color: tk.textMuted }} />
                     </Box>
                   </AccordionItemTrigger>
-                  <AccordionItemContent pt={1} pb={1.5} px={1} borderTop="1px" borderColor="gray.100">
+                  <AccordionItemContent pt={1} pb={1.5} px={1} borderTop="1px" borderColor={tk.borderSubtle}>
                     <VStack spacing={0} align="stretch">
                       {indicators.map(indicator => (
                         <NavItem
@@ -189,6 +215,7 @@ function App() {
                           indicator={indicator}
                           isActive={selectedIndicator.id === indicator.id}
                           onSelect={setSelectedIndicator}
+                          darkMode={darkMode}
                         />
                       ))}
                     </VStack>
@@ -200,8 +227,8 @@ function App() {
         </Box>
 
         {/* Footer */}
-        <Box px={4} py={3} borderTop="1px" borderColor="gray.100">
-          <Text fontSize="10px" color="gray.400" lineHeight="1.5">
+        <Box px={4} py={3} borderTop="1px" borderColor={tk.border}>
+          <Text fontSize="10px" color={tk.textMuted} lineHeight="1.5">
             Federal Reserve Economic Data (FRED) · Bureau of Labor Statistics (BLS)
           </Text>
         </Box>
@@ -218,6 +245,7 @@ function App() {
             setShowForecast={setShowForecast}
             showMoM={showMoM}
             showTable={showTable}
+            darkMode={darkMode}
             timeRange={timeRange}
             setTimeRange={setTimeRange}
             visibleSegments={visibleSegments}
@@ -237,6 +265,8 @@ function App() {
           setShowMoM={setShowMoM}
           showTable={showTable}
           setShowTable={setShowTable}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
           timeRange={timeRange}
           setTimeRange={setTimeRange}
           visibleSegments={visibleSegments}

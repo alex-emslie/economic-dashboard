@@ -41,6 +41,8 @@ import { fetchBlsData } from '../services/blsApi';
 import { fetchWorldBankData } from '../services/worldBankApi';
 import { linearRegression, detectTrend } from '../utils/forecasting';
 import { analyzeCorrelations, generateCorrelationInsight } from '../utils/correlation';
+import { Settings } from 'lucide-react';
+import { t } from '../App';
 
 const fetchIndicatorData = (indicator, seriesId, limit) => {
   if (indicator.source === 'bls') return fetchBlsData(seriesId, limit);
@@ -54,9 +56,16 @@ const EconomicChart = ({
   showForecast, setShowForecast,
   showMoM,
   showTable,
+  darkMode,
   timeRange, setTimeRange,
   visibleSegments, setVisibleSegments,
 }) => {
+  const tk = t(darkMode);
+  const chartColors = {
+    grid: darkMode ? '#334155' : '#e5e7eb',
+    axis: darkMode ? '#475569' : '#d1d5db',
+    tick: darkMode ? '#94a3b8' : '#6b7280',
+  };
   const [allData, setAllData] = useState([]);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -257,11 +266,11 @@ const EconomicChart = ({
         .filter(({ value }) => value !== undefined && value !== null);
 
       return (
-        <Box bg="white" p={3} borderRadius="lg" boxShadow="lg" border="1px" borderColor="gray.200" maxW="280px">
-          <Text fontWeight="semibold" fontSize="sm" color="gray.900" mb={0.5}>
+        <Box bg={tk.cardBg} p={3} borderRadius="lg" boxShadow="lg" border="1px" borderColor={tk.border} maxW="280px">
+          <Text fontWeight="semibold" fontSize="sm" color={tk.textPrimary} mb={0.5}>
             {formatDate(d.date)}
           </Text>
-          <Text fontSize="xs" color="gray.400" mb={4} lineHeight="1.4">
+          <Text fontSize="xs" color={tk.textMuted} mb={4} lineHeight="1.4">
             {indicator.description}
           </Text>
           {visibleValues.map(({ segment, value }) => (
@@ -270,20 +279,20 @@ const EconomicChart = ({
                 <Text fontSize="xs" fontWeight="semibold" color={segment.color}>
                   {segment.name}
                 </Text>
-                <Text fontSize="xs" color="gray.700" whiteSpace="nowrap">
-                  {value.toLocaleString()} <Box as="span" color="gray.400">{indicator.unit}</Box>
+                <Text fontSize="xs" color={tk.textSecondary} whiteSpace="nowrap">
+                  {value.toLocaleString()} <Box as="span" color={tk.textMuted}>{indicator.unit}</Box>
                 </Text>
               </Flex>
               {segment.description && (
-                <Text fontSize="10px" color="gray.400" lineHeight="1.3" mt={0.5}>
+                <Text fontSize="10px" color={tk.textMuted} lineHeight="1.3" mt={0.5}>
                   {segment.description}
                 </Text>
               )}
             </Box>
           ))}
           {d.momChange !== null && (
-            <Text fontSize="xs" mt={1} pt={1.5} borderTop="1px" borderColor="gray.100">
-              <Box as="span" color="gray.500">MoM: </Box>
+            <Text fontSize="xs" mt={1} pt={1.5} borderTop="1px" borderColor={tk.borderSubtle}>
+              <Box as="span" color={tk.textSecondary}>MoM: </Box>
               <Box as="span" fontWeight="semibold" color={d.momChange >= 0 ? 'green.500' : 'red.500'}>
                 {d.momChange >= 0 ? '+' : ''}{d.momChange}%
               </Box>
@@ -303,7 +312,7 @@ const EconomicChart = ({
         {payload.map((entry) => (
           <Flex key={entry.value} align="center" gap={1.5}>
             <Box w={3} h="2px" bg={entry.color} borderRadius="full" flexShrink={0} />
-            <Text fontSize="xs" color="gray.600">{entry.value}</Text>
+            <Text fontSize="xs" color={tk.textSecondary}>{entry.value}</Text>
           </Flex>
         ))}
       </Flex>
@@ -348,11 +357,11 @@ const EconomicChart = ({
 
   if (loading) {
     return (
-      <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm">
+      <Box bg={tk.cardBg} borderRadius="lg" border="1px" borderColor={tk.border} shadow="sm">
         <Flex align="center" justify="center" minH="500px">
           <VStack spacing={3}>
             <Spinner size="lg" color="green.500" thickness="2px" />
-            <Text fontSize="sm" color="gray.500">Loading data...</Text>
+            <Text fontSize="sm" color={tk.textSecondary}>Loading data...</Text>
           </VStack>
         </Flex>
       </Box>
@@ -361,11 +370,11 @@ const EconomicChart = ({
 
   if (error) {
     return (
-      <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm" p={6}>
-        <Box bg="red.50" border="1px" borderColor="red.200" borderRadius="lg" p={4} mb={4}>
-          <Text fontSize="sm" fontWeight="medium" color="red.800">{error}</Text>
+      <Box bg={tk.cardBg} borderRadius="lg" border="1px" borderColor={tk.border} shadow="sm" p={6}>
+        <Box bg={darkMode ? '#450a0a' : 'red.50'} border="1px" borderColor={darkMode ? '#7f1d1d' : 'red.200'} borderRadius="lg" p={4} mb={4}>
+          <Text fontSize="sm" fontWeight="medium" color={darkMode ? '#fca5a5' : 'red.800'}>{error}</Text>
         </Box>
-        <Text fontSize="sm" color="gray.600">
+        <Text fontSize="sm" color={tk.textSecondary}>
           Get a free API key at:{' '}
           <Link href="https://fred.stlouisfed.org/docs/api/api_key.html" color="green.500" isExternal textDecoration="underline">
             FRED API
@@ -376,40 +385,32 @@ const EconomicChart = ({
   }
 
   return (
-    <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm">
+    <Box bg={tk.cardBg} borderRadius="lg" border="1px" borderColor={tk.border} shadow="sm">
       {/* Header */}
-      <Box borderBottom="1px" borderColor="gray.200" px={6} py={5}>
+      <Box borderBottom="1px" borderColor={tk.border} px={6} py={5}>
         <Flex justify="space-between" align="center" gap={4} wrap="wrap">
           {/* Title + meta */}
           <Box minW="0">
             <Flex align="center" gap={3} mb={1}>
-              <Text as="h2" fontSize="xl" fontWeight="bold" color="gray.900">
+              <Text as="h2" fontSize="xl" fontWeight="bold" color={tk.textPrimary}>
                 {indicator.title}
               </Text>
-              {trend && (
-                <Badge
-                  colorScheme={trend.direction === 'up' ? 'green' : trend.direction === 'down' ? 'red' : 'gray'}
-                  fontSize="xs"
-                  px={2}
-                  py={0.5}
-                >
-                  {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'} {trend.direction.toUpperCase()}
-                </Badge>
-              )}
             </Flex>
-            <Text fontSize="sm" color="gray.500">{indicator.description}</Text>
+            <Text fontSize="sm" color={tk.textSecondary}>{indicator.description}</Text>
           </Box>
 
-          {/* Controls trigger */}
+          {/* Settings trigger */}
           <Button
             onClick={onControlsToggle}
             variant={controlsOpen ? 'solid' : 'outline'}
-            colorPalette={controlsOpen ? 'gray' : 'gray'}
+            colorPalette="gray"
             size="md"
             flexShrink={0}
             px={5}
+            gap={2}
           >
-            Controls
+            <Settings size={15} />
+            Settings
           </Button>
         </Flex>
       </Box>
@@ -423,31 +424,31 @@ const EconomicChart = ({
               data={chartData}
               margin={{ top: 10, right: showMoM ? 60 : 20, left: 20, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDate}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
+                tick={{ fontSize: 11, fill: chartColors.tick }}
                 angle={-45}
                 textAnchor="end"
                 height={80}
-                stroke="#d1d5db"
+                stroke={chartColors.axis}
               />
               <YAxis
                 yAxisId="left"
                 tickFormatter={formatAxisValue}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                label={{ value: indicator.unit, angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6b7280' } }}
-                stroke="#d1d5db"
+                tick={{ fontSize: 11, fill: chartColors.tick }}
+                label={{ value: indicator.unit, angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: chartColors.tick } }}
+                stroke={chartColors.axis}
               />
               {showMoM && (
                 <YAxis
                   yAxisId="right"
                   orientation="right"
                   domain={getMoMDomain()}
-                  tick={{ fontSize: 11, fill: '#6b7280' }}
-                  label={{ value: 'MoM Change (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6b7280' } }}
-                  stroke="#d1d5db"
+                  tick={{ fontSize: 11, fill: chartColors.tick }}
+                  label={{ value: 'MoM Change (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: chartColors.tick } }}
+                  stroke={chartColors.axis}
                 />
               )}
               <Tooltip content={CustomTooltip} />
@@ -519,12 +520,12 @@ const EconomicChart = ({
 
       {/* Correlation Insights */}
       {correlations.length > 0 && (
-        <Box borderTop="1px" borderColor="gray.200" px={4} py={3}>
+        <Box borderTop="1px" borderColor={tk.border} px={4} py={3}>
           <HStack mb={3} gap={2} align="center">
-            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.500">
+            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textSecondary}>
               Correlation Insights
             </Text>
-            <Box flex="1" h="1px" bg="gray.100" />
+            <Box flex="1" h="1px" bg={tk.borderSubtle} />
           </HStack>
           <Flex gap={3} wrap="wrap">
             {correlations.slice(0, 3).map((corr, index) => {
@@ -533,10 +534,10 @@ const EconomicChart = ({
               const absStrength = Math.abs(corr.correlation);
               const strengthLabel = absStrength >= 0.8 ? 'Strong' : absStrength >= 0.5 ? 'Moderate' : 'Weak';
               return (
-                <CardRoot key={index} flex="1" minW="200px" variant="outline">
+                <CardRoot key={index} flex="1" minW="200px" variant="outline" bg={tk.cardBg} borderColor={tk.border}>
                   <CardBody p={3}>
                     <StatRoot>
-                      <StatLabel fontWeight="semibold" color="gray.700" mb={1.5}>{insight.title}</StatLabel>
+                      <StatLabel fontWeight="semibold" color={tk.textSecondary} mb={1.5}>{insight.title}</StatLabel>
                       <Flex align="center" gap={1} mb={2}>
                         {isPositive ? <StatUpIndicator /> : <StatDownIndicator />}
                         <StatValueText fontSize="lg" color={isPositive ? 'green.600' : 'red.600'}>
@@ -546,7 +547,7 @@ const EconomicChart = ({
                           {strengthLabel}
                         </Badge>
                       </Flex>
-                      <StatHelpText fontSize="xs" color="gray.500" lineHeight="1.6">{insight.description}</StatHelpText>
+                      <StatHelpText fontSize="xs" color={tk.textMuted} lineHeight="1.6">{insight.description}</StatHelpText>
                     </StatRoot>
                   </CardBody>
                 </CardRoot>
@@ -558,17 +559,17 @@ const EconomicChart = ({
 
       {/* Data Table */}
       {showTable && data.length > 0 && (
-        <Box borderTop="1px" borderColor="gray.200" px={4} py={3}>
+        <Box borderTop="1px" borderColor={tk.border} px={4} py={3}>
           <HStack mb={3} gap={2} align="center">
-            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.500">
+            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textSecondary}>
               Data Breakdown
             </Text>
-            <Box flex="1" h="1px" bg="gray.100" />
+            <Box flex="1" h="1px" bg={tk.borderSubtle} />
           </HStack>
           <Box overflowX="auto">
             <Box as="table" w="full" fontSize="xs" style={{ borderCollapse: 'collapse' }}>
               <Box as="thead">
-                <Box as="tr" borderBottom="2px" borderColor="gray.200">
+                <Box as="tr" borderBottom="2px" borderColor={tk.border}>
                   {['Date', 'Value', 'MoM Δ', 'YoY Δ', '3M Avg', 'vs 3M Avg'].map(col => (
                     <Box
                       key={col}
@@ -577,7 +578,7 @@ const EconomicChart = ({
                       py={2}
                       textAlign={col === 'Date' ? 'left' : 'right'}
                       fontWeight="semibold"
-                      color="gray.500"
+                      color={tk.textSecondary}
                       whiteSpace="nowrap"
                       letterSpacing="wider"
                       textTransform="uppercase"
@@ -590,19 +591,19 @@ const EconomicChart = ({
               <Box as="tbody">
                 {[...data].reverse().map((row, i) => {
                   const val = row[indicator.seriesId];
-                  const deltaColor = (v) => v == null ? 'gray.400' : v > 0 ? 'green.600' : v < 0 ? 'red.500' : 'gray.500';
+                  const deltaColor = (v) => v == null ? tk.textMuted : v > 0 ? 'green.500' : v < 0 ? 'red.500' : tk.textSecondary;
                   const fmtDelta = (v) => v == null ? '—' : `${v > 0 ? '+' : ''}${v}%`;
                   return (
                     <Box
                       key={row.date}
                       as="tr"
-                      bg={i % 2 === 0 ? 'white' : 'gray.50'}
-                      _hover={{ bg: 'blue.50' }}
+                      bg={i % 2 === 0 ? tk.cardBg : tk.cardBgAlt}
+                      _hover={{ bg: tk.navActive }}
                     >
-                      <Box as="td" px={3} py={1.5} color="gray.700" whiteSpace="nowrap">
+                      <Box as="td" px={3} py={1.5} color={tk.textSecondary} whiteSpace="nowrap">
                         {formatDate(row.date)}
                       </Box>
-                      <Box as="td" px={3} py={1.5} textAlign="right" color="gray.900" fontWeight="medium" whiteSpace="nowrap">
+                      <Box as="td" px={3} py={1.5} textAlign="right" color={tk.textPrimary} fontWeight="medium" whiteSpace="nowrap">
                         {val != null ? formatAxisValue(val) : '—'}
                       </Box>
                       <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.momChange)} whiteSpace="nowrap" fontWeight={row.momChange != null ? 'medium' : 'normal'}>
@@ -611,7 +612,7 @@ const EconomicChart = ({
                       <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.yoyChange)} whiteSpace="nowrap" fontWeight={row.yoyChange != null ? 'medium' : 'normal'}>
                         {fmtDelta(row.yoyChange)}
                       </Box>
-                      <Box as="td" px={3} py={1.5} textAlign="right" color="gray.600" whiteSpace="nowrap">
+                      <Box as="td" px={3} py={1.5} textAlign="right" color={tk.textSecondary} whiteSpace="nowrap">
                         {row.avg3m != null ? formatAxisValue(row.avg3m) : '—'}
                       </Box>
                       <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.vsAvg)} whiteSpace="nowrap" fontWeight={row.vsAvg != null ? 'medium' : 'normal'}>
@@ -627,8 +628,8 @@ const EconomicChart = ({
       )}
 
       {/* Footer */}
-      <Box borderTop="1px" borderColor="gray.200" px={6} py={4} bg="gray.50" borderBottomRadius="lg">
-        <Text fontSize="xs" color="gray.500">
+      <Box borderTop="1px" borderColor={tk.border} px={6} py={4} bg={tk.cardBgAlt} borderBottomRadius="lg">
+        <Text fontSize="xs" color={tk.textSecondary}>
           Data source: Federal Reserve Economic Data (FRED) • {data.length} observations
         </Text>
         {indicator.id === 'GDP' && (
@@ -656,12 +657,15 @@ export const ControlsPanel = ({
   showForecast, setShowForecast,
   showMoM, setShowMoM,
   showTable, setShowTable,
+  darkMode, setDarkMode,
   timeRange, setTimeRange,
   visibleSegments, toggleSegment, toggleAllSegments,
-}) => (
+}) => {
+  const tk = t(darkMode);
+  return (
   <Box
     w="340px"
-    bg="white"
+    bg={tk.sidebarBg}
     boxShadow="md"
     flexShrink={0}
     display="flex"
@@ -671,14 +675,14 @@ export const ControlsPanel = ({
     h="100vh"
     overflowY="auto"
   >
-    <Flex justify="space-between" align="center" px={5} py={5} borderBottom="1px" borderColor="gray.100">
-      <Text fontSize="sm" fontWeight="semibold" color="gray.700">Controls</Text>
+    <Flex justify="space-between" align="center" px={5} py={5} borderBottom="1px" borderColor={tk.border}>
+      <Text fontSize="sm" fontWeight="semibold" color={tk.textPrimary}>Settings</Text>
       <Button
         onClick={onClose}
         variant="ghost"
         size="sm"
-        color="gray.400"
-        _hover={{ color: 'gray.700' }}
+        color={tk.textMuted}
+        _hover={{ color: tk.textPrimary }}
         minW="auto"
         px={2}
       >
@@ -690,13 +694,13 @@ export const ControlsPanel = ({
 
       {/* Forecast */}
       <Box>
-        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textMuted} mb={3}>
           Forecast
         </Text>
         <Flex justify="space-between" align="center">
           <Box>
-            <Text fontSize="sm" fontWeight="medium" color="gray.700">Show Forecast</Text>
-            <Text fontSize="xs" color="gray.400">ML-generated projection</Text>
+            <Text fontSize="sm" fontWeight="medium" color={tk.textPrimary}>Show Forecast</Text>
+            <Text fontSize="xs" color={tk.textMuted}>ML-generated projection</Text>
           </Box>
           <SwitchRoot
             checked={showForecast}
@@ -714,16 +718,42 @@ export const ControlsPanel = ({
 
       <Separator />
 
+      {/* Appearance */}
+      <Box>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textMuted} mb={3}>
+          Appearance
+        </Text>
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" color={tk.textPrimary}>Dark Mode</Text>
+            <Text fontSize="xs" color={tk.textMuted}>Switch to dark theme</Text>
+          </Box>
+          <SwitchRoot
+            checked={darkMode}
+            onCheckedChange={(e) => setDarkMode(e.checked)}
+            colorPalette="green"
+            size="md"
+          >
+            <SwitchHiddenInput />
+            <SwitchControl>
+              <SwitchThumb />
+            </SwitchControl>
+          </SwitchRoot>
+        </Flex>
+      </Box>
+
+      <Separator />
+
       {/* Chart Overlays */}
       <Box>
-        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textMuted} mb={3}>
           Chart Overlays
         </Text>
         <VStack align="stretch" gap={3}>
           <Flex justify="space-between" align="center">
             <Box>
-              <Text fontSize="sm" fontWeight="medium" color="gray.700">Month-over-Month Bars</Text>
-              <Text fontSize="xs" color="gray.400">Show MoM % change bars</Text>
+              <Text fontSize="sm" fontWeight="medium" color={tk.textPrimary}>Month-over-Month Bars</Text>
+              <Text fontSize="xs" color={tk.textMuted}>Show MoM % change bars</Text>
             </Box>
             <SwitchRoot
               checked={showMoM}
@@ -739,8 +769,8 @@ export const ControlsPanel = ({
           </Flex>
           <Flex justify="space-between" align="center">
             <Box>
-              <Text fontSize="sm" fontWeight="medium" color="gray.700">Data Table</Text>
-              <Text fontSize="xs" color="gray.400">MoM, YoY, rolling averages</Text>
+              <Text fontSize="sm" fontWeight="medium" color={tk.textPrimary}>Data Table</Text>
+              <Text fontSize="xs" color={tk.textMuted}>MoM, YoY, rolling averages</Text>
             </Box>
             <SwitchRoot
               checked={showTable}
@@ -761,10 +791,10 @@ export const ControlsPanel = ({
 
       {/* Time Range */}
       <Box>
-        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textMuted} mb={3}>
           Time Range
         </Text>
-        <Flex gap={1} bg="gray.50" borderRadius="lg" p={1} border="1px" borderColor="gray.200" wrap="wrap">
+        <Flex gap={1} bg={tk.inputBg} borderRadius="lg" p={1} border="1px" borderColor={tk.border} wrap="wrap">
           {timeRangeOptions.map((range) => (
             <Button
               key={range.value}
@@ -772,12 +802,12 @@ export const ControlsPanel = ({
               flex="1"
               size="sm"
               fontWeight="medium"
-              bg={timeRange === range.value ? 'white' : 'transparent'}
-              color={timeRange === range.value ? 'gray.900' : 'gray.600'}
+              bg={timeRange === range.value ? tk.cardBg : 'transparent'}
+              color={timeRange === range.value ? tk.textPrimary : tk.textSecondary}
               border={timeRange === range.value ? '1px' : '0'}
-              borderColor={timeRange === range.value ? 'gray.200' : 'transparent'}
+              borderColor={timeRange === range.value ? tk.border : 'transparent'}
               boxShadow={timeRange === range.value ? 'sm' : 'none'}
-              _hover={{ bg: timeRange === range.value ? 'white' : 'gray.100', color: 'gray.900' }}
+              _hover={{ bg: tk.navActive, color: tk.textPrimary }}
               borderRadius="md"
             >
               {range.label}
@@ -791,15 +821,15 @@ export const ControlsPanel = ({
       {/* Segments */}
       <Box>
         <Flex justify="space-between" align="center" mb={3}>
-          <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400">
+          <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color={tk.textMuted}>
             Segments
           </Text>
           <Button
             onClick={toggleAllSegments}
             variant="ghost"
             size="xs"
-            color="gray.500"
-            _hover={{ color: 'gray.700' }}
+            color={tk.textSecondary}
+            _hover={{ color: tk.textPrimary }}
           >
             {visibleSegments.length === indicator.segments.length ? 'Deselect All' : 'Select All'}
           </Button>
@@ -814,7 +844,7 @@ export const ControlsPanel = ({
               gap={3}
               px={3}
               py={2}
-              _hover={{ bg: 'gray.50' }}
+              _hover={{ bg: tk.navHover }}
               borderRadius="md"
               cursor="pointer"
             >
@@ -828,7 +858,7 @@ export const ControlsPanel = ({
               />
               <Flex alignItems="center" gap={2} flex={1}>
                 <Box w={2.5} h={2.5} borderRadius="full" bg={segment.color} />
-                <Text fontSize="sm" color="gray.700">{segment.name}</Text>
+                <Text fontSize="sm" color={tk.textSecondary}>{segment.name}</Text>
               </Flex>
             </Box>
           ))}
@@ -837,6 +867,7 @@ export const ControlsPanel = ({
 
     </VStack>
   </Box>
-);
+  );
+};
 
 export default EconomicChart;
