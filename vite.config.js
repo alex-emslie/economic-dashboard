@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/fred/, '/fred'),
       },
+      '/api/bls': {
+        target: 'https://api.bls.gov',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/bls/, '/publicAPI/v2'),
+      },
     },
   },
 })

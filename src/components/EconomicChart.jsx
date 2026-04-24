@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -9,6 +9,19 @@ import {
   VStack,
   HStack,
   Badge,
+  SwitchRoot,
+  SwitchControl,
+  SwitchThumb,
+  SwitchHiddenInput,
+  CardRoot,
+  CardBody,
+  StatRoot,
+  StatLabel,
+  StatValueText,
+  StatHelpText,
+  StatUpIndicator,
+  StatDownIndicator,
+  Separator,
 } from '@chakra-ui/react';
 import {
   ComposedChart,
@@ -24,45 +37,34 @@ import {
   Area,
 } from 'recharts';
 import { fetchFredData, ECONOMIC_INDICATORS } from '../services/fredApi';
+import { fetchBlsData } from '../services/blsApi';
+import { fetchWorldBankData } from '../services/worldBankApi';
 import { linearRegression, detectTrend } from '../utils/forecasting';
 import { analyzeCorrelations, generateCorrelationInsight } from '../utils/correlation';
 
-const EconomicChart = ({ indicator }) => {
+const fetchIndicatorData = (indicator, seriesId, limit) => {
+  if (indicator.source === 'bls') return fetchBlsData(seriesId, limit);
+  if (indicator.source === 'worldbank') return fetchWorldBankData(seriesId, limit);
+  return fetchFredData(seriesId, limit);
+};
+
+const EconomicChart = ({
+  indicator,
+  controlsOpen, onControlsToggle,
+  showForecast, setShowForecast,
+  showMoM,
+  showTable,
+  timeRange, setTimeRange,
+  visibleSegments, setVisibleSegments,
+}) => {
   const [allData, setAllData] = useState([]);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState('1Y');
-  const [visibleSegments, setVisibleSegments] = useState([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [showForecast, setShowForecast] = useState(true);
   const [forecast, setForecast] = useState([]);
   const [trend, setTrend] = useState(null);
   const [correlations, setCorrelations] = useState([]);
   const [allIndicatorsData, setAllIndicatorsData] = useState({});
-  const dropdownRef = useRef(null);
-
-  // Initialize visible segments when indicator changes
-  useEffect(() => {
-    setVisibleSegments(indicator.segments.map(s => s.id));
-  }, [indicator]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false);
-      }
-    };
-
-    if (dropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [dropdownOpen]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -71,7 +73,7 @@ const EconomicChart = ({ indicator }) => {
       try {
         // Fetch data for all segments
         const segmentPromises = indicator.segments.map(segment =>
-          fetchFredData(segment.id, 500)
+          fetchIndicatorData(indicator, segment.id, 500)
         );
 
         const segmentDataArrays = await Promise.all(segmentPromises);
@@ -94,27 +96,52 @@ const EconomicChart = ({ indicator }) => {
           new Date(a.date) - new Date(b.date)
         );
 
-        // Calculate month-over-month for the primary series
-        const dataWithMoM = mergedData.map((point, index) => {
-          if (index === 0) {
-            return { ...point, momChange: null };
-          }
-          const previous = mergedData[index - 1][indicator.seriesId];
+        // Calculate MoM, YoY, and 3-month rolling average
+        const dataWithStats = mergedData.map((point, index) => {
           const current = point[indicator.seriesId];
-          if (previous && current) {
-            const percentChange = ((current - previous) / previous) * 100;
-            return {
-              ...point,
-              momChange: parseFloat(percentChange.toFixed(2)),
-            };
+
+          // MoM
+          const prevMonth = mergedData[index - 1]?.[indicator.seriesId];
+          const momChange = (prevMonth && current)
+            ? parseFloat(((current - prevMonth) / prevMonth * 100).toFixed(2))
+            : null;
+
+          // YoY — find data point ~12 entries back with matching month
+          let yoyChange = null;
+          if (current && index >= 12) {
+            const currentMonth = new Date(point.date).getMonth();
+            for (let i = index - 1; i >= Math.max(0, index - 14); i--) {
+              if (new Date(mergedData[i].date).getMonth() === currentMonth) {
+                const yoyBase = mergedData[i][indicator.seriesId];
+                if (yoyBase) {
+                  yoyChange = parseFloat(((current - yoyBase) / yoyBase * 100).toFixed(2));
+                }
+                break;
+              }
+            }
           }
-          return { ...point, momChange: null };
+
+          // 3-month rolling average
+          const windowSize = Math.min(3, index + 1);
+          const windowVals = mergedData.slice(index - windowSize + 1, index + 1)
+            .map(d => d[indicator.seriesId])
+            .filter(v => v != null);
+          const avg3m = windowVals.length > 0
+            ? parseFloat((windowVals.reduce((a, b) => a + b, 0) / windowVals.length).toFixed(2))
+            : null;
+
+          // Deviation from 3M avg
+          const vsAvg = (current && avg3m)
+            ? parseFloat(((current - avg3m) / avg3m * 100).toFixed(2))
+            : null;
+
+          return { ...point, momChange, yoyChange, avg3m, vsAvg };
         });
 
-        setAllData(dataWithMoM);
+        setAllData(dataWithStats);
 
         // Generate forecast for primary series
-        const primaryData = dataWithMoM.map(d => ({
+        const primaryData = dataWithStats.map(d => ({
           date: d.date,
           value: d[indicator.seriesId]
         })).filter(d => d.value !== undefined && d.value !== null);
@@ -126,7 +153,7 @@ const EconomicChart = ({ indicator }) => {
         const trendInfo = detectTrend(primaryData);
         setTrend(trendInfo);
 
-        // Fetch data for all other indicators for correlation analysis
+        // Fetch FRED indicators for correlation analysis (FRED-only)
         const otherIndicatorsData = {};
         const otherIndicatorPromises = Object.values(ECONOMIC_INDICATORS)
           .filter(ind => ind.id !== indicator.id)
@@ -221,34 +248,44 @@ const EconomicChart = ({ indicator }) => {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
   };
 
-  // Custom tooltip
+  // Custom tooltip (hover card)
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const d = payload[0].payload;
+      const visibleValues = indicator.segments
+        .map(segment => ({ segment, value: d[segment.id] }))
+        .filter(({ value }) => value !== undefined && value !== null);
+
       return (
-        <Box bg="white" p={3} borderRadius="lg" boxShadow="lg" border="1px" borderColor="gray.200" maxW="xs">
-          <Text fontWeight="semibold" fontSize="sm" color="gray.900" mb={1.5}>
-            {formatDate(data.date)}
+        <Box bg="white" p={3} borderRadius="lg" boxShadow="lg" border="1px" borderColor="gray.200" maxW="280px">
+          <Text fontWeight="semibold" fontSize="sm" color="gray.900" mb={0.5}>
+            {formatDate(d.date)}
           </Text>
-          {indicator.segments.map((segment) => {
-            const value = data[segment.id];
-            if (value !== undefined && value !== null) {
-              return (
-                <Text key={segment.id} fontSize="xs" color="gray.600" mb={0.5}>
-                  <Box as="span" fontWeight="semibold" color={segment.color}>
-                    {segment.name}:
-                  </Box>{' '}
-                  {value.toLocaleString()} {indicator.unit}
+          <Text fontSize="xs" color="gray.400" mb={4} lineHeight="1.4">
+            {indicator.description}
+          </Text>
+          {visibleValues.map(({ segment, value }) => (
+            <Box key={segment.id} mb={2}>
+              <Flex justify="space-between" align="baseline" gap={6}>
+                <Text fontSize="xs" fontWeight="semibold" color={segment.color}>
+                  {segment.name}
                 </Text>
-              );
-            }
-            return null;
-          })}
-          {data.momChange !== null && (
-            <Text fontSize="xs" mt={1.5} pt={1.5} borderTop="1px" borderColor="gray.200">
-              <Box as="span" color="gray.600">MoM:</Box>{' '}
-              <Box as="span" fontWeight="semibold" color={data.momChange >= 0 ? 'green.500' : 'red.500'}>
-                {data.momChange >= 0 ? '+' : ''}{data.momChange}%
+                <Text fontSize="xs" color="gray.700" whiteSpace="nowrap">
+                  {value.toLocaleString()} <Box as="span" color="gray.400">{indicator.unit}</Box>
+                </Text>
+              </Flex>
+              {segment.description && (
+                <Text fontSize="10px" color="gray.400" lineHeight="1.3" mt={0.5}>
+                  {segment.description}
+                </Text>
+              )}
+            </Box>
+          ))}
+          {d.momChange !== null && (
+            <Text fontSize="xs" mt={1} pt={1.5} borderTop="1px" borderColor="gray.100">
+              <Box as="span" color="gray.500">MoM: </Box>
+              <Box as="span" fontWeight="semibold" color={d.momChange >= 0 ? 'green.500' : 'red.500'}>
+                {d.momChange >= 0 ? '+' : ''}{d.momChange}%
               </Box>
             </Text>
           )}
@@ -258,35 +295,28 @@ const EconomicChart = ({ indicator }) => {
     return null;
   };
 
-  const timeRanges = [
-    { value: '3M', label: '3M' },
-    { value: '6M', label: '6M' },
-    { value: '1Y', label: '1Y' },
-    { value: '2Y', label: '2Y' },
-    { value: '5Y', label: '5Y' },
-    { value: 'ALL', label: 'All' },
-  ];
-
-  // Toggle segment visibility
-  const toggleSegment = (segmentId) => {
-    setVisibleSegments(prev => {
-      if (prev.includes(segmentId)) {
-        return prev.filter(id => id !== segmentId);
-      } else {
-        return [...prev, segmentId];
-      }
-    });
+  // Custom legend (no separate tooltip — descriptions are in the hover card)
+  const CustomLegend = ({ payload }) => {
+    if (!payload?.length) return null;
+    return (
+      <Flex gap={3} wrap="wrap" justify="center" pt={2}>
+        {payload.map((entry) => (
+          <Flex key={entry.value} align="center" gap={1.5}>
+            <Box w={3} h="2px" bg={entry.color} borderRadius="full" flexShrink={0} />
+            <Text fontSize="xs" color="gray.600">{entry.value}</Text>
+          </Flex>
+        ))}
+      </Flex>
+    );
   };
 
-  // Toggle all segments
-  const toggleAllSegments = () => {
-    if (visibleSegments.length === indicator.segments.length) {
-      // Deselect all
-      setVisibleSegments([]);
-    } else {
-      // Select all
-      setVisibleSegments(indicator.segments.map(s => s.id));
-    }
+  // Format large numbers with k/m/b suffixes
+  const formatAxisValue = (value) => {
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}b`;
+    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}m`;
+    if (abs >= 1_000) return `${(value / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+    return value;
   };
 
   // Calculate symmetric domain for MoM axis (centered at 0)
@@ -349,153 +379,49 @@ const EconomicChart = ({ indicator }) => {
     <Box bg="white" borderRadius="lg" border="1px" borderColor="gray.200" shadow="sm">
       {/* Header */}
       <Box borderBottom="1px" borderColor="gray.200" px={6} py={5}>
-        <Flex justify="space-between" align="start" gap={4}>
-          <Box>
-            <Text as="h2" fontSize="xl" fontWeight="bold" color="gray.900" mb={1}>
-              {indicator.title}
-            </Text>
+        <Flex justify="space-between" align="center" gap={4} wrap="wrap">
+          {/* Title + meta */}
+          <Box minW="0">
+            <Flex align="center" gap={3} mb={1}>
+              <Text as="h2" fontSize="xl" fontWeight="bold" color="gray.900">
+                {indicator.title}
+              </Text>
+              {trend && (
+                <Badge
+                  colorScheme={trend.direction === 'up' ? 'green' : trend.direction === 'down' ? 'red' : 'gray'}
+                  fontSize="xs"
+                  px={2}
+                  py={0.5}
+                >
+                  {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'} {trend.direction.toUpperCase()}
+                </Badge>
+              )}
+            </Flex>
             <Text fontSize="sm" color="gray.500">{indicator.description}</Text>
           </Box>
 
-          <Flex gap={3} align="start">
-            {/* Segment Selector Dropdown */}
-            <Box position="relative" ref={dropdownRef}>
-              <Button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                px={4}
-                py={2.5}
-                fontSize="sm"
-                fontWeight="medium"
-                bg="gray.50"
-                color="gray.900"
-                border="1px"
-                borderColor="gray.200"
-                _hover={{ bg: 'gray.100' }}
-                whiteSpace="nowrap"
-              >
-                Segments ({visibleSegments.length}/{indicator.segments.length})
-              </Button>
-
-              {dropdownOpen && (
-                <Box
-                  position="absolute"
-                  right={0}
-                  mt={2}
-                  w="256px"
-                  bg="white"
-                  borderRadius="lg"
-                  boxShadow="lg"
-                  border="1px"
-                  borderColor="gray.200"
-                  zIndex={10}
-                  p={2}
-                >
-                  <Button
-                    onClick={toggleAllSegments}
-                    w="full"
-                    px={4}
-                    py={2}
-                    fontSize="sm"
-                    fontWeight="medium"
-                    color="gray.700"
-                    bg="transparent"
-                    justifyContent="flex-start"
-                    _hover={{ bg: 'gray.50' }}
-                  >
-                    {visibleSegments.length === indicator.segments.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                  <Box borderTop="1px" borderColor="gray.200" my={2} />
-                  {indicator.segments.map((segment) => (
-                    <Box
-                      key={segment.id}
-                      as="label"
-                      display="flex"
-                      alignItems="center"
-                      gap={3}
-                      px={4}
-                      py={2}
-                      _hover={{ bg: 'gray.50' }}
-                      borderRadius="md"
-                      cursor="pointer"
-                    >
-                      <Box
-                        as="input"
-                        type="checkbox"
-                        checked={visibleSegments.includes(segment.id)}
-                        onChange={() => toggleSegment(segment.id)}
-                        w={4}
-                        h={4}
-                      />
-                      <Flex alignItems="center" gap={2} flex={1}>
-                        <Box w={3} h={3} borderRadius="full" bg={segment.color} />
-                        <Text fontSize="sm" color="gray.700">{segment.name}</Text>
-                      </Flex>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-
-            {/* Time Range Selector */}
-            <Flex gap={1} bg="gray.50" borderRadius="lg" p={1} border="1px" borderColor="gray.200">
-              {timeRanges.map((range) => (
-                <Button
-                  key={range.value}
-                  onClick={() => setTimeRange(range.value)}
-                  px={4}
-                  py={2.5}
-                  fontSize="sm"
-                  fontWeight="medium"
-                  bg={timeRange === range.value ? 'white' : 'transparent'}
-                  color={timeRange === range.value ? 'gray.900' : 'gray.600'}
-                  border={timeRange === range.value ? '1px' : '0'}
-                  borderColor={timeRange === range.value ? 'gray.200' : 'transparent'}
-                  boxShadow={timeRange === range.value ? 'sm' : 'none'}
-                  _hover={{
-                    bg: timeRange === range.value ? 'white' : 'gray.100',
-                    color: 'gray.900',
-                  }}
-                  borderRadius="md"
-                >
-                  {range.label}
-                </Button>
-              ))}
-            </Flex>
-          </Flex>
+          {/* Controls trigger */}
+          <Button
+            onClick={onControlsToggle}
+            variant={controlsOpen ? 'solid' : 'outline'}
+            colorPalette={controlsOpen ? 'gray' : 'gray'}
+            size="md"
+            flexShrink={0}
+            px={5}
+          >
+            Controls
+          </Button>
         </Flex>
       </Box>
 
-      {/* Chart */}
-      <Box p={6}>
-        {/* Trend and Forecast Toggle */}
-        <Flex justify="space-between" align="center" mb={4}>
-          <HStack spacing={2}>
-            {trend && (
-              <Badge
-                colorScheme={trend.direction === 'up' ? 'green' : trend.direction === 'down' ? 'red' : 'gray'}
-                fontSize="sm"
-                px={3}
-                py={1}
-              >
-                Trend: {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'} {trend.direction.toUpperCase()}
-              </Badge>
-            )}
-          </HStack>
-          <Button
-            size="sm"
-            onClick={() => setShowForecast(!showForecast)}
-            colorScheme={showForecast ? 'green' : 'gray'}
-            variant={showForecast ? 'solid' : 'outline'}
-          >
-            {showForecast ? 'Hide' : 'Show'} Forecast
-          </Button>
-        </Flex>
 
+      {/* Chart */}
+      <Box px={6} py={6}>
         <Box w="full" h="500px">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={chartData}
-              margin={{ top: 10, right: 60, left: 20, bottom: 5 }}
+              margin={{ top: 10, right: showMoM ? 60 : 20, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
@@ -509,37 +435,39 @@ const EconomicChart = ({ indicator }) => {
               />
               <YAxis
                 yAxisId="left"
+                tickFormatter={formatAxisValue}
                 tick={{ fontSize: 11, fill: '#6b7280' }}
                 label={{ value: indicator.unit, angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6b7280' } }}
                 stroke="#d1d5db"
               />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                domain={getMoMDomain()}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                label={{ value: 'MoM Change (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6b7280' } }}
-                stroke="#d1d5db"
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                iconType="line"
-              />
-              <Bar
-                yAxisId="right"
-                dataKey="momChange"
-                name="MoM Change %"
-                radius={[4, 4, 0, 0]}
-              >
-                {data.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.momChange === null ? 'transparent' : (entry.momChange >= 0 ? '#10b981' : '#ef4444')}
-                    fillOpacity={entry.momChange === null ? 0 : 0.6}
-                  />
-                ))}
-              </Bar>
+              {showMoM && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={getMoMDomain()}
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
+                  label={{ value: 'MoM Change (%)', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6b7280' } }}
+                  stroke="#d1d5db"
+                />
+              )}
+              <Tooltip content={CustomTooltip} />
+              <Legend content={<CustomLegend />} />
+              {showMoM && (
+                <Bar
+                  yAxisId="right"
+                  dataKey="momChange"
+                  name="MoM Change %"
+                  radius={[4, 4, 0, 0]}
+                >
+                  {data.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.momChange === null ? 'transparent' : (entry.momChange >= 0 ? '#10b981' : '#ef4444')}
+                      fillOpacity={entry.momChange === null ? 0 : 0.6}
+                    />
+                  ))}
+                </Bar>
+              )}
               {indicator.segments
                 .filter(segment => visibleSegments.includes(segment.id))
                 .map((segment) => (
@@ -591,47 +519,115 @@ const EconomicChart = ({ indicator }) => {
 
       {/* Correlation Insights */}
       {correlations.length > 0 && (
-        <Box borderTop="1px" borderColor="gray.200" px={6} py={4}>
-          <Text fontSize="sm" fontWeight="semibold" color="gray.900" mb={3}>
-            Correlation Insights
-          </Text>
-          <VStack spacing={2} align="stretch">
+        <Box borderTop="1px" borderColor="gray.200" px={4} py={3}>
+          <HStack mb={3} gap={2} align="center">
+            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.500">
+              Correlation Insights
+            </Text>
+            <Box flex="1" h="1px" bg="gray.100" />
+          </HStack>
+          <Flex gap={3} wrap="wrap">
             {correlations.slice(0, 3).map((corr, index) => {
               const insight = generateCorrelationInsight(indicator.title, corr);
+              const isPositive = corr.relationship === 'positive';
+              const absStrength = Math.abs(corr.correlation);
+              const strengthLabel = absStrength >= 0.8 ? 'Strong' : absStrength >= 0.5 ? 'Moderate' : 'Weak';
               return (
-                <Box
-                  key={index}
-                  p={3}
-                  bg="gray.50"
-                  borderRadius="md"
-                  border="1px"
-                  borderColor="gray.200"
-                >
-                  <Flex justify="space-between" align="start" mb={1}>
-                    <Text fontSize="sm" fontWeight="medium" color="gray.900">
-                      {insight.title}
-                    </Text>
-                    <Badge
-                      colorScheme={
-                        corr.relationship === 'positive' ? 'green' : 'red'
-                      }
-                      fontSize="xs"
-                    >
-                      {corr.correlation > 0 ? '+' : ''}{(corr.correlation * 100).toFixed(0)}%
-                    </Badge>
-                  </Flex>
-                  <Text fontSize="xs" color="gray.600">
-                    {insight.description}
-                  </Text>
-                </Box>
+                <CardRoot key={index} flex="1" minW="200px" variant="outline">
+                  <CardBody p={3}>
+                    <StatRoot>
+                      <StatLabel fontWeight="semibold" color="gray.700" mb={1.5}>{insight.title}</StatLabel>
+                      <Flex align="center" gap={1} mb={2}>
+                        {isPositive ? <StatUpIndicator /> : <StatDownIndicator />}
+                        <StatValueText fontSize="lg" color={isPositive ? 'green.600' : 'red.600'}>
+                          {(absStrength * 100).toFixed(0)}%
+                        </StatValueText>
+                        <Badge variant="subtle" colorPalette={isPositive ? 'green' : 'red'} size="sm" px={1.5} py={0.5} border="1px" borderColor={isPositive ? 'green.200' : 'red.200'}>
+                          {strengthLabel}
+                        </Badge>
+                      </Flex>
+                      <StatHelpText fontSize="xs" color="gray.500" lineHeight="1.6">{insight.description}</StatHelpText>
+                    </StatRoot>
+                  </CardBody>
+                </CardRoot>
               );
             })}
-          </VStack>
+          </Flex>
+        </Box>
+      )}
+
+      {/* Data Table */}
+      {showTable && data.length > 0 && (
+        <Box borderTop="1px" borderColor="gray.200" px={4} py={3}>
+          <HStack mb={3} gap={2} align="center">
+            <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.500">
+              Data Breakdown
+            </Text>
+            <Box flex="1" h="1px" bg="gray.100" />
+          </HStack>
+          <Box overflowX="auto">
+            <Box as="table" w="full" fontSize="xs" style={{ borderCollapse: 'collapse' }}>
+              <Box as="thead">
+                <Box as="tr" borderBottom="2px" borderColor="gray.200">
+                  {['Date', 'Value', 'MoM Δ', 'YoY Δ', '3M Avg', 'vs 3M Avg'].map(col => (
+                    <Box
+                      key={col}
+                      as="th"
+                      px={3}
+                      py={2}
+                      textAlign={col === 'Date' ? 'left' : 'right'}
+                      fontWeight="semibold"
+                      color="gray.500"
+                      whiteSpace="nowrap"
+                      letterSpacing="wider"
+                      textTransform="uppercase"
+                    >
+                      {col}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+              <Box as="tbody">
+                {[...data].reverse().map((row, i) => {
+                  const val = row[indicator.seriesId];
+                  const deltaColor = (v) => v == null ? 'gray.400' : v > 0 ? 'green.600' : v < 0 ? 'red.500' : 'gray.500';
+                  const fmtDelta = (v) => v == null ? '—' : `${v > 0 ? '+' : ''}${v}%`;
+                  return (
+                    <Box
+                      key={row.date}
+                      as="tr"
+                      bg={i % 2 === 0 ? 'white' : 'gray.50'}
+                      _hover={{ bg: 'blue.50' }}
+                    >
+                      <Box as="td" px={3} py={1.5} color="gray.700" whiteSpace="nowrap">
+                        {formatDate(row.date)}
+                      </Box>
+                      <Box as="td" px={3} py={1.5} textAlign="right" color="gray.900" fontWeight="medium" whiteSpace="nowrap">
+                        {val != null ? formatAxisValue(val) : '—'}
+                      </Box>
+                      <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.momChange)} whiteSpace="nowrap" fontWeight={row.momChange != null ? 'medium' : 'normal'}>
+                        {fmtDelta(row.momChange)}
+                      </Box>
+                      <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.yoyChange)} whiteSpace="nowrap" fontWeight={row.yoyChange != null ? 'medium' : 'normal'}>
+                        {fmtDelta(row.yoyChange)}
+                      </Box>
+                      <Box as="td" px={3} py={1.5} textAlign="right" color="gray.600" whiteSpace="nowrap">
+                        {row.avg3m != null ? formatAxisValue(row.avg3m) : '—'}
+                      </Box>
+                      <Box as="td" px={3} py={1.5} textAlign="right" color={deltaColor(row.vsAvg)} whiteSpace="nowrap" fontWeight={row.vsAvg != null ? 'medium' : 'normal'}>
+                        {fmtDelta(row.vsAvg)}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+          </Box>
         </Box>
       )}
 
       {/* Footer */}
-      <Box borderTop="1px" borderColor="gray.200" px={6} py={4} bg="gray.50">
+      <Box borderTop="1px" borderColor="gray.200" px={6} py={4} bg="gray.50" borderBottomRadius="lg">
         <Text fontSize="xs" color="gray.500">
           Data source: Federal Reserve Economic Data (FRED) • {data.length} observations
         </Text>
@@ -644,5 +640,203 @@ const EconomicChart = ({ indicator }) => {
     </Box>
   );
 };
+
+const timeRangeOptions = [
+  { value: '3M', label: '3M' },
+  { value: '6M', label: '6M' },
+  { value: '1Y', label: '1Y' },
+  { value: '2Y', label: '2Y' },
+  { value: '5Y', label: '5Y' },
+  { value: 'ALL', label: 'All' },
+];
+
+export const ControlsPanel = ({
+  onClose,
+  indicator,
+  showForecast, setShowForecast,
+  showMoM, setShowMoM,
+  showTable, setShowTable,
+  timeRange, setTimeRange,
+  visibleSegments, toggleSegment, toggleAllSegments,
+}) => (
+  <Box
+    w="340px"
+    bg="white"
+    boxShadow="md"
+    flexShrink={0}
+    display="flex"
+    flexDirection="column"
+    position="sticky"
+    top={0}
+    h="100vh"
+    overflowY="auto"
+  >
+    <Flex justify="space-between" align="center" px={5} py={5} borderBottom="1px" borderColor="gray.100">
+      <Text fontSize="sm" fontWeight="semibold" color="gray.700">Controls</Text>
+      <Button
+        onClick={onClose}
+        variant="ghost"
+        size="sm"
+        color="gray.400"
+        _hover={{ color: 'gray.700' }}
+        minW="auto"
+        px={2}
+      >
+        ✕
+      </Button>
+    </Flex>
+
+    <VStack align="stretch" gap={6} p={5} flex={1}>
+
+      {/* Forecast */}
+      <Box>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+          Forecast
+        </Text>
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" color="gray.700">Show Forecast</Text>
+            <Text fontSize="xs" color="gray.400">ML-generated projection</Text>
+          </Box>
+          <SwitchRoot
+            checked={showForecast}
+            onCheckedChange={(e) => setShowForecast(e.checked)}
+            colorPalette="green"
+            size="md"
+          >
+            <SwitchHiddenInput />
+            <SwitchControl>
+              <SwitchThumb />
+            </SwitchControl>
+          </SwitchRoot>
+        </Flex>
+      </Box>
+
+      <Separator />
+
+      {/* Chart Overlays */}
+      <Box>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+          Chart Overlays
+        </Text>
+        <VStack align="stretch" gap={3}>
+          <Flex justify="space-between" align="center">
+            <Box>
+              <Text fontSize="sm" fontWeight="medium" color="gray.700">Month-over-Month Bars</Text>
+              <Text fontSize="xs" color="gray.400">Show MoM % change bars</Text>
+            </Box>
+            <SwitchRoot
+              checked={showMoM}
+              onCheckedChange={(e) => setShowMoM(e.checked)}
+              colorPalette="green"
+              size="md"
+            >
+              <SwitchHiddenInput />
+              <SwitchControl>
+                <SwitchThumb />
+              </SwitchControl>
+            </SwitchRoot>
+          </Flex>
+          <Flex justify="space-between" align="center">
+            <Box>
+              <Text fontSize="sm" fontWeight="medium" color="gray.700">Data Table</Text>
+              <Text fontSize="xs" color="gray.400">MoM, YoY, rolling averages</Text>
+            </Box>
+            <SwitchRoot
+              checked={showTable}
+              onCheckedChange={(e) => setShowTable(e.checked)}
+              colorPalette="green"
+              size="md"
+            >
+              <SwitchHiddenInput />
+              <SwitchControl>
+                <SwitchThumb />
+              </SwitchControl>
+            </SwitchRoot>
+          </Flex>
+        </VStack>
+      </Box>
+
+      <Separator />
+
+      {/* Time Range */}
+      <Box>
+        <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400" mb={3}>
+          Time Range
+        </Text>
+        <Flex gap={1} bg="gray.50" borderRadius="lg" p={1} border="1px" borderColor="gray.200" wrap="wrap">
+          {timeRangeOptions.map((range) => (
+            <Button
+              key={range.value}
+              onClick={() => setTimeRange(range.value)}
+              flex="1"
+              size="sm"
+              fontWeight="medium"
+              bg={timeRange === range.value ? 'white' : 'transparent'}
+              color={timeRange === range.value ? 'gray.900' : 'gray.600'}
+              border={timeRange === range.value ? '1px' : '0'}
+              borderColor={timeRange === range.value ? 'gray.200' : 'transparent'}
+              boxShadow={timeRange === range.value ? 'sm' : 'none'}
+              _hover={{ bg: timeRange === range.value ? 'white' : 'gray.100', color: 'gray.900' }}
+              borderRadius="md"
+            >
+              {range.label}
+            </Button>
+          ))}
+        </Flex>
+      </Box>
+
+      <Separator />
+
+      {/* Segments */}
+      <Box>
+        <Flex justify="space-between" align="center" mb={3}>
+          <Text fontSize="xs" fontWeight="bold" letterSpacing="wider" textTransform="uppercase" color="gray.400">
+            Segments
+          </Text>
+          <Button
+            onClick={toggleAllSegments}
+            variant="ghost"
+            size="xs"
+            color="gray.500"
+            _hover={{ color: 'gray.700' }}
+          >
+            {visibleSegments.length === indicator.segments.length ? 'Deselect All' : 'Select All'}
+          </Button>
+        </Flex>
+        <VStack align="stretch" gap={1}>
+          {indicator.segments.map((segment) => (
+            <Box
+              key={segment.id}
+              as="label"
+              display="flex"
+              alignItems="center"
+              gap={3}
+              px={3}
+              py={2}
+              _hover={{ bg: 'gray.50' }}
+              borderRadius="md"
+              cursor="pointer"
+            >
+              <Box
+                as="input"
+                type="checkbox"
+                checked={visibleSegments.includes(segment.id)}
+                onChange={() => toggleSegment(segment.id)}
+                w={4}
+                h={4}
+              />
+              <Flex alignItems="center" gap={2} flex={1}>
+                <Box w={2.5} h={2.5} borderRadius="full" bg={segment.color} />
+                <Text fontSize="sm" color="gray.700">{segment.name}</Text>
+              </Flex>
+            </Box>
+          ))}
+        </VStack>
+      </Box>
+
+    </VStack>
+  </Box>
+);
 
 export default EconomicChart;
